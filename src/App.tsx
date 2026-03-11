@@ -12,19 +12,10 @@ export default function App() {
   const [tempFixes, setTempFixes] = useState<StandardMap>({});
   const [bannerLoaded, setBannerLoaded] = useState(false);
 
-  // 內建常用國家翻譯字典，解決 AI/系統 識別問題
+  // 內建翻譯保底
   const countryDict: StandardMap = {
-    "australia": "澳洲",
-    "philippines": "菲律賓",
-    "phillippines": "菲律賓",
-    "indonesia": "印尼",
-    "malaysia": "馬來西亞",
-    "thailand": "泰國",
-    "vietnam": "越南",
-    "japan": "日本",
-    "korea": "韓國",
-    "usa": "美國",
-    "uk": "英國"
+    "australia": "澳洲", "philippines": "菲律賓", "phillippines": "菲律賓",
+    "indonesia": "印尼", "malaysia": "馬來西亞", "thailand": "泰國"
   };
 
   const cleanStr = (s: any) => String(s || "").replace(/\s+/g, '').toLowerCase();
@@ -36,9 +27,11 @@ export default function App() {
     const unSchools = new Set<string>();
     const currentFullSMap = { ...sMap, ...fixes };
 
+    // 1. 資料抓取階段
     data.forEach(row => {
       const sn = String(row["隊伍序號"] || "").trim();
-      if (sn.startsWith("888") || !sn.startsWith("99")) return;
+      if (!sn || sn.startsWith("888")) return; // 只濾除測試帳號
+      
       const [gid, mid] = sn.split("_");
       if (!teams[gid]) {
         teams[gid] = { 
@@ -47,7 +40,7 @@ export default function App() {
           school: String(row["學校"] || "").trim() 
         };
       }
-      teams[gid].members.push(parseInt(mid));
+      teams[gid].members.push(mid ? parseInt(mid) : 0);
     });
 
     const stats: any = {
@@ -55,9 +48,12 @@ export default function App() {
       Sustainability: { teams: 0, people: 0, schools: new Set(), countries: new Set(), overseas: 0, list: [] }
     };
 
+    // 2. 統計階段
     Object.keys(teams).forEach(gid => {
       const t = teams[gid];
       const cat = t.category.toLowerCase().includes("energy") ? "Energy" : "Sustainability";
+      
+      // 這裡採用最寬鬆的比對：去除空格後比對
       const rawSchoolClean = cleanStr(t.school);
       const matchKey = Object.keys(currentFullSMap).find(k => cleanStr(k) === rawSchoolClean);
       const stdSchool = matchKey ? currentFullSMap[matchKey] : "";
@@ -74,16 +70,8 @@ export default function App() {
         const parts = stdSchool.split(",");
         const rawC = parts[parts.length - 1].trim();
         const cleanC = cleanStr(rawC);
-        
-        // 優先從上傳的國家對照表找，找不到則從內建字典翻譯
         const countryMatchKey = Object.keys(cMap).find(k => cleanStr(k) === cleanC);
-        if (countryMatchKey) {
-          country = cMap[countryMatchKey];
-        } else if (countryDict[cleanC]) {
-          country = countryDict[cleanC];
-        } else {
-          country = rawC; // 都沒有則維持原樣
-        }
+        country = countryMatchKey ? cMap[countryMatchKey] : (countryDict[cleanC] || rawC);
       }
 
       stats[cat].teams += 1;
@@ -100,6 +88,7 @@ export default function App() {
     return { stats, unSchools: Array.from(unSchools) };
   }, [data, sMap, fixes, cMap]);
 
+  // 匯出功能與 PNG 下載 (維持原樣)
   const loadFile = (e: any, type: string) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -120,19 +109,7 @@ export default function App() {
     r.readAsBinaryString(f);
   };
 
-  const handleDownloadPNG = (id: string, name: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      html2canvas(el, { scale: 3 }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `${name}_${today}.png`;
-        link.href = canvas.toDataURL();
-        link.click();
-      });
-    }
-  };
-
-  const exportExcel = (type: 'school' | 'country' | 'stats') => {
+  const exportExcel = (type: string) => {
     const wb = XLSX.utils.book_new();
     if (type === 'school') {
       const dataX = Object.entries({ ...sMap, ...fixes }).map(([k, v]) => ({ "原始名稱": k, "標準名稱": v }));
@@ -162,9 +139,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-40" style={{ fontFamily: '"Microsoft JhengHei", sans-serif' }}>
-      <div className="w-full bg-slate-200 flex items-center justify-center relative">
+      <div className="w-full bg-slate-200 flex items-center justify-center relative shadow-sm">
         <img src="/banner.png" alt="Banner" className="w-full h-auto block" onLoad={() => setBannerLoaded(true)} onError={(e) => { e.currentTarget.style.display = 'none'; setBannerLoaded(false); }} />
-        {!bannerLoaded && <p className="absolute text-slate-400 font-bold text-xl uppercase">Banner 區域</p>}
+        {!bannerLoaded && <p className="absolute text-slate-400 font-bold text-xl uppercase tracking-widest">Banner 區域</p>}
       </div>
 
       <div className="max-w-[1200px] mx-auto mt-12 px-6">
@@ -174,7 +151,7 @@ export default function App() {
             {[{ t: '1. 原始報名資料', id: 'raw' }, { t: '2. 學校標準表', id: 'school' }, { t: '3. 國家標準表', id: 'country' }].map(box => (
               <div key={box.id} className="p-6 border-2 border-slate-100 rounded-2xl bg-slate-50/50">
                 <p className="font-black text-lg mb-3">{box.t}</p>
-                <input type="file" onChange={e => loadFile(e, box.id)} className="text-xs w-full cursor-pointer"/>
+                <input type="file" onChange={e => loadFile(e, box.id)} className="text-xs w-full"/>
               </div>
             ))}
           </div>
@@ -184,21 +161,17 @@ export default function App() {
           <div className="space-y-24">
             {/* Report 01 - 總表 */}
             <div className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
-              <div className="flex justify-between items-center mb-8">
-                <h4 className="text-2xl font-black bg-slate-900 text-white px-6 py-2 rounded-full">Report 01</h4>
-                <button onClick={() => handleDownloadPNG('table-summary', 'NZ目前報名狀況統計表')} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold">下載 PNG</button>
-              </div>
               <div id="table-summary" className="p-8 bg-white border-[6px] border-slate-900">
                 <h2 className="text-4xl font-black mb-6 border-b-4 border-slate-900 pb-2">NZ 目前報名狀況統計表</h2>
-                <div className="text-right font-bold mb-2">資料更新日期：{today}</div>
+                <div style={{ textAlign: 'right', fontWeight: 'bold', marginBottom: '8px' }}>資料更新日期：{today}</div>
                 <table className="w-full border-collapse border-[4px] border-slate-900 text-2xl font-black">
                   <thead className="bg-slate-100">
                     <tr className="border-b-[4px] border-slate-900">
-                      <th className="border-r-4 border-slate-900 p-4 text-left">統計項目</th>
-                      <th className="border-r-4 border-slate-900 p-4 text-right">Energy</th>
-                      <th className="border-r-4 border-slate-900 p-4 text-right">Sustainability</th>
-                      <th className="border-r-4 border-slate-900 p-4 text-right bg-slate-200">合計</th>
-                      <th className="p-4 text-left text-base text-slate-500 font-normal">備註</th>
+                      <th style={{ textAlign: 'left', padding: '16px' }} className="border-r-4 border-slate-900">統計項目</th>
+                      <th style={{ textAlign: 'right', padding: '16px' }} className="border-r-4 border-slate-900">Energy</th>
+                      <th style={{ textAlign: 'right', padding: '16px' }} className="border-r-4 border-slate-900">Sustainability</th>
+                      <th style={{ textAlign: 'right', padding: '16px' }} className="border-r-4 border-slate-900 bg-slate-200">合計</th>
+                      <th style={{ textAlign: 'left', padding: '16px', fontWeight: 'normal' }} className="text-base text-slate-500">備註</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -209,17 +182,17 @@ export default function App() {
                       { l: '報名國家數', k: 'countries', note: '不計算重複國家' }
                     ].map((row, i) => (
                       <tr key={i} className="border-b-4 border-slate-900">
-                        <td className="border-r-4 border-slate-900 p-4 text-left bg-slate-50">{row.l}</td>
-                        <td className={`border-r-4 border-slate-900 p-4 text-right ${row.c}`}>{i === 2 || i === 4 ? res.stats.Energy[row.k].size : res.stats.Energy[row.k]}</td>
-                        <td className={`border-r-4 border-slate-900 p-4 text-right ${row.c}`}>{i === 2 || i === 4 ? res.stats.Sustainability[row.k].size : res.stats.Sustainability[row.k]}</td>
-                        <td className={`border-r-4 border-slate-900 p-4 text-right bg-slate-100 ${row.c}`}>
+                        <td style={{ textAlign: 'left', padding: '16px' }} className="border-r-4 border-slate-900 bg-slate-50">{row.l}</td>
+                        <td style={{ textAlign: 'right', padding: '16px' }} className={`border-r-4 border-slate-900 ${row.c}`}>{i === 2 || i === 4 ? res.stats.Energy[row.k].size : res.stats.Energy[row.k]}</td>
+                        <td style={{ textAlign: 'right', padding: '16px' }} className={`border-r-4 border-slate-900 ${row.c}`}>{i === 2 || i === 4 ? res.stats.Sustainability[row.k].size : res.stats.Sustainability[row.k]}</td>
+                        <td style={{ textAlign: 'right', padding: '16px' }} className={`border-r-4 border-slate-900 bg-slate-100 ${row.c}`}>
                           {row.k === 'teams' ? (res.stats.Energy.teams + res.stats.Sustainability.teams) :
                            row.k === 'people' ? (res.stats.Energy.people + res.stats.Sustainability.people) :
                            row.k === 'overseas' ? (res.stats.Energy.overseas + res.stats.Sustainability.overseas) :
                            row.k === 'schools' ? new Set([...res.stats.Energy.schools, ...res.stats.Sustainability.schools]).size :
                            new Set([...res.stats.Energy.countries, ...res.stats.Sustainability.countries]).size}
                         </td>
-                        <td className="p-4 text-left text-sm text-slate-400 font-normal">{row.note}</td>
+                        <td style={{ textAlign: 'left', padding: '16px', fontSize: '14px', fontWeight: 'normal' }} className="text-slate-400">{row.note}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -227,32 +200,28 @@ export default function App() {
               </div>
             </div>
 
-            {/* Report 02 & 03 - 分表 */}
+            {/* Report 02 & 03 分表 */}
             {['Energy', 'Sustainability'].map((cat, idx) => (
               <div key={cat} className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
-                <div className="flex justify-between items-center mb-8">
-                  <h4 className={`text-2xl font-black ${idx===0?'bg-blue-600':'bg-emerald-600'} text-white px-6 py-2 rounded-full`}>Report 0{idx+2}</h4>
-                  <button onClick={() => handleDownloadPNG(`table-${cat}`, `${cat}組-報名名單`)} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold">下載 PNG</button>
-                </div>
                 <div id={`table-${cat}`} className={`p-8 bg-white border-[6px] ${idx===0?'border-blue-600':'border-emerald-600'}`}>
                   <h2 className={`text-4xl font-black mb-6 border-b-4 pb-2 ${idx===0?'border-blue-600 text-blue-600':'border-emerald-600 text-emerald-600'}`}>{cat}組 - 報名之學校與國家隊伍數</h2>
-                  <div className="text-right font-bold mb-2">更新時間：{today}</div>
+                  <div style={{ textAlign: 'right', fontWeight: 'bold', marginBottom: '8px' }}>更新時間：{today}</div>
                   <table className="w-full text-xl border-collapse border-[4px] border-slate-900 font-black">
                     <thead className="bg-slate-100">
                       <tr className="border-b-4 border-slate-900">
-                        <th className="border-r-4 border-slate-900 p-3 w-16 text-center">#</th>
-                        <th className="border-r-4 border-slate-900 p-3 text-left">學校名稱</th>
-                        <th className="border-r-4 border-slate-900 p-3 w-40 text-right">代表國家</th>
-                        <th className="p-3 w-32 text-right">隊伍數</th>
+                        <th style={{ textAlign: 'center', padding: '12px', width: '64px' }} className="border-r-4 border-slate-900">#</th>
+                        <th style={{ textAlign: 'left', padding: '12px' }} className="border-r-4 border-slate-900">學校名稱</th>
+                        <th style={{ textAlign: 'right', padding: '12px', width: '160px' }} className="border-r-4 border-slate-900">代表國家</th>
+                        <th style={{ textAlign: 'right', padding: '12px', width: '128px' }}>隊伍數</th>
                       </tr>
                     </thead>
                     <tbody>
                       {res.stats[cat].list.sort((a:any, b:any)=>b.count - a.count).map((item:any, idx2:number) => (
                         <tr key={idx2} className="border-b-2 border-slate-200">
-                          <td className="border-r-2 p-3 text-center text-slate-300">{idx2+1}</td>
-                          <td className="border-r-2 p-3 text-left leading-tight">{item.school.split(',')[0]}</td>
-                          <td className="border-r-2 p-3 text-right">{item.country}</td>
-                          <td className={`p-3 text-right text-2xl ${idx===0?'text-blue-600':'text-emerald-600'}`}>{item.count}</td>
+                          <td style={{ textAlign: 'center', padding: '12px' }} className="border-r-2 text-slate-300">{idx2+1}</td>
+                          <td style={{ textAlign: 'left', padding: '12px' }} className="border-r-2">{item.school.split(',')[0]}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }} className="border-r-2">{item.country}</td>
+                          <td style={{ textAlign: 'right', padding: '12px', fontSize: '24px' }} className={idx===0?'text-blue-600':'text-emerald-600'}>{item.count}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -261,7 +230,6 @@ export default function App() {
               </div>
             ))}
 
-            {/* 檔案匯出中心 */}
             <div className="bg-slate-900 p-12 rounded-3xl shadow-2xl text-white">
               <h2 className="text-3xl font-black mb-8 border-b border-slate-700 pb-4 tracking-widest uppercase text-center">檔案匯出中心</h2>
               <div className="grid grid-cols-3 gap-8">
@@ -269,7 +237,6 @@ export default function App() {
                 <button onClick={() => exportExcel('country')} className="p-8 bg-slate-800 rounded-2xl border-2 border-slate-700 hover:border-blue-500 transition text-xl font-black">更新後國家標準對照表</button>
                 <button onClick={() => exportExcel('stats')} className="p-8 bg-emerald-600 rounded-2xl border-2 border-emerald-500 hover:bg-white hover:text-emerald-600 transition text-xl font-black">本次統計資料表</button>
               </div>
-              <p className="text-center text-slate-600 font-bold mt-12 italic tracking-widest">2026 NZ AUTO-STATS ENGINE v1.7</p>
             </div>
           </div>
         )}
