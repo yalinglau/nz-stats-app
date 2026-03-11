@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 
@@ -84,7 +84,7 @@ export default function App() {
       const bstr = ex.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      const m: StandardMap = {};
+      const m: StandardMap = {}; // 這裡標註了類型
       json.forEach((row: any) => {
         const ks = Object.keys(row);
         if (row[ks[0]]) m[String(row[ks[0]]).trim()] = String(row[ks[1]] || "").trim();
@@ -119,20 +119,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-40" style={{ fontFamily: '"Microsoft JhengHei", "微軟正黑體", Arial, sans-serif' }}>
-      
-      {/* Banner 區 */}
       <div className="w-full bg-slate-200 flex items-center justify-center relative shadow-sm" style={{ minHeight: bannerLoaded ? 'auto' : '150px' }}>
         <img src="/banner.png" alt="Banner" className="w-full h-auto block" onLoad={() => setBannerLoaded(true)} onError={(e) => { e.currentTarget.style.display = 'none'; setBannerLoaded(false); }} />
         {!bannerLoaded && <p className="absolute text-slate-400 font-bold text-xl uppercase tracking-widest">Banner 區域</p>}
       </div>
 
       <div className="max-w-[1200px] mx-auto mt-12 px-6">
-        
-        {/* 1. 控制台與上傳區 */}
         <div className="bg-white p-10 rounded-3xl shadow-xl border border-slate-200 mb-16">
           <h1 className="text-4xl font-black mb-10 border-l-8 border-slate-900 pl-6 uppercase">2026 NZ 統計控制中心</h1>
           <div className="grid grid-cols-3 gap-8">
-            {[{ t: '原始報名資料', id: 'raw', c: 'blue' }, { t: '學校標準表', id: 'school', c: 'slate' }, { t: '國家標準表', id: 'country', c: 'slate' }].map(box => (
+            {[{ t: '原始報名資料', id: 'raw' }, { t: '學校標準表', id: 'school' }, { t: '國家標準表', id: 'country' }].map(box => (
               <div key={box.id} className="p-6 border-2 border-slate-100 rounded-2xl hover:border-blue-200 transition bg-slate-50/50">
                 <p className="font-black text-lg mb-3">{box.t}</p>
                 <input type="file" onChange={e => loadFile(e, box.id)} className="text-xs w-full cursor-pointer"/>
@@ -141,7 +137,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 2. 校名修正區 */}
         {res && res.unSchools.length > 0 && (
           <div className="mb-16 p-10 bg-rose-50 border-4 border-rose-200 rounded-3xl shadow-xl">
             <div className="flex justify-between items-center mb-8">
@@ -159,11 +154,8 @@ export default function App() {
           </div>
         )}
 
-        {/* 3. 統計結果展現區 (分為三個卡片，確保間距) */}
         {res && (
-          <div className="space-y-24"> {/* 強大的垂直間距 */}
-            
-            {/* (1) NZ目前報名狀況統計表 */}
+          <div className="space-y-24">
             <div className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
               <div className="flex justify-between items-center mb-8">
                 <h4 className="text-2xl font-black bg-slate-900 text-white px-6 py-2 rounded-full">Report 01</h4>
@@ -207,7 +199,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* (2) Energy 分表 */}
             <div className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
               <div className="flex justify-between items-center mb-8">
                 <h4 className="text-2xl font-black bg-blue-600 text-white px-6 py-2 rounded-full">Report 02</h4>
@@ -241,7 +232,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* (3) Sustainability 分表 */}
             <div className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
               <div className="flex justify-between items-center mb-8">
                 <h4 className="text-2xl font-black bg-emerald-600 text-white px-6 py-2 rounded-full">Report 03</h4>
@@ -275,7 +265,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 4. 資料庫維護區 (移動至最下方) */}
             <div className="bg-slate-900 p-12 rounded-3xl shadow-2xl text-white">
               <div className="flex justify-between items-center mb-8 border-b border-slate-700 pb-6">
                 <div>
@@ -287,9 +276,8 @@ export default function App() {
                   <button onClick={() => exportMap('country')} className="bg-blue-400 text-slate-900 px-8 py-3 rounded-xl font-black hover:bg-white transition">匯出最新國家對照表</button>
                 </div>
               </div>
-              <p className="text-center text-slate-600 font-bold italic">2026 NZ AUTO-STATS ENGINE v1.5 - Optimized for Individual Reporting</p>
+              <p className="text-center text-slate-600 font-bold italic">2026 NZ AUTO-STATS ENGINE v1.5</p>
             </div>
-
           </div>
         )}
       </div>
