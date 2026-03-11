@@ -12,6 +12,21 @@ export default function App() {
   const [tempFixes, setTempFixes] = useState<StandardMap>({});
   const [bannerLoaded, setBannerLoaded] = useState(false);
 
+  // 內建常用國家翻譯字典，解決 AI/系統 識別問題
+  const countryDict: StandardMap = {
+    "australia": "澳洲",
+    "philippines": "菲律賓",
+    "phillippines": "菲律賓",
+    "indonesia": "印尼",
+    "malaysia": "馬來西亞",
+    "thailand": "泰國",
+    "vietnam": "越南",
+    "japan": "日本",
+    "korea": "韓國",
+    "usa": "美國",
+    "uk": "英國"
+  };
+
   const cleanStr = (s: any) => String(s || "").replace(/\s+/g, '').toLowerCase();
   const today = new Date().toLocaleDateString();
 
@@ -57,9 +72,18 @@ export default function App() {
       let country = "臺灣";
       if (stdSchool.includes(",")) {
         const parts = stdSchool.split(",");
-        const rawC = cleanStr(parts[parts.length - 1]);
-        const countryMatchKey = Object.keys(cMap).find(k => cleanStr(k).includes(rawC) || rawC.includes(cleanStr(k)));
-        country = countryMatchKey ? cMap[countryMatchKey] : parts[parts.length - 1].trim();
+        const rawC = parts[parts.length - 1].trim();
+        const cleanC = cleanStr(rawC);
+        
+        // 優先從上傳的國家對照表找，找不到則從內建字典翻譯
+        const countryMatchKey = Object.keys(cMap).find(k => cleanStr(k) === cleanC);
+        if (countryMatchKey) {
+          country = cMap[countryMatchKey];
+        } else if (countryDict[cleanC]) {
+          country = countryDict[cleanC];
+        } else {
+          country = rawC; // 都沒有則維持原樣
+        }
       }
 
       stats[cat].teams += 1;
@@ -111,15 +135,14 @@ export default function App() {
   const exportExcel = (type: 'school' | 'country' | 'stats') => {
     const wb = XLSX.utils.book_new();
     if (type === 'school') {
-      const data = Object.entries({ ...sMap, ...fixes }).map(([k, v]) => ({ "原始名稱": k, "標準名稱": v }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "學校對照表");
+      const dataX = Object.entries({ ...sMap, ...fixes }).map(([k, v]) => ({ "原始名稱": k, "標準名稱": v }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataX), "學校對照表");
       XLSX.writeFile(wb, `2026_NZ_更新後學校標準對照表_${today}.xlsx`);
     } else if (type === 'country') {
-      const data = Object.entries(cMap).map(([k, v]) => ({ "原始名稱": k, "標準名稱": v }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "國家對照表");
+      const dataX = Object.entries(cMap).map(([k, v]) => ({ "原始名稱": k, "標準名稱": v }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataX), "國家對照表");
       XLSX.writeFile(wb, `2026_NZ_更新後國家標準對照表_${today}.xlsx`);
     } else if (type === 'stats' && res) {
-      // 分頁 1: Summary
       const summaryData = [
         ["統計項目", "Energy", "Sustainability", "合計", "備註"],
         ["報名隊伍數", res.stats.Energy.teams, res.stats.Sustainability.teams, res.stats.Energy.teams + res.stats.Sustainability.teams, ""],
@@ -129,70 +152,45 @@ export default function App() {
         ["報名國家數", res.stats.Energy.countries.size, res.stats.Sustainability.countries.size, new Set([...res.stats.Energy.countries, ...res.stats.Sustainability.countries]).size, "不計算重複國家"]
       ];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryData), "報名狀況統計總表");
-      // 分頁 2: Energy
       const energyData = [["#", "學校名稱", "代表國家", "隊伍數"], ...res.stats.Energy.list.sort((a:any,b:any)=>b.count-a.count).map((item:any, i:number)=>[i+1, item.school, item.country, item.count])];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(energyData), "Energy組名單");
-      // 分頁 3: Sust
       const sustData = [["#", "學校名稱", "代表國家", "隊伍數"], ...res.stats.Sustainability.list.sort((a:any,b:any)=>b.count-a.count).map((item:any, i:number)=>[i+1, item.school, item.country, item.count])];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sustData), "Sustainability組名單");
-      
       XLSX.writeFile(wb, `2026_NZ_本次統計資料表_${today}.xlsx`);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-40" style={{ fontFamily: '"Microsoft JhengHei", sans-serif' }}>
-      <div className="w-full bg-slate-200 flex items-center justify-center relative" style={{ minHeight: bannerLoaded ? 'auto' : '150px' }}>
+      <div className="w-full bg-slate-200 flex items-center justify-center relative">
         <img src="/banner.png" alt="Banner" className="w-full h-auto block" onLoad={() => setBannerLoaded(true)} onError={(e) => { e.currentTarget.style.display = 'none'; setBannerLoaded(false); }} />
-        {!bannerLoaded && <p className="absolute text-slate-400 font-bold text-xl uppercase tracking-widest">Banner 區域</p>}
+        {!bannerLoaded && <p className="absolute text-slate-400 font-bold text-xl uppercase">Banner 區域</p>}
       </div>
 
       <div className="max-w-[1200px] mx-auto mt-12 px-6">
-        {/* 控制中心：上傳 */}
         <div className="bg-white p-10 rounded-3xl shadow-xl border border-slate-200 mb-16">
           <h1 className="text-4xl font-black mb-10 border-l-8 border-slate-900 pl-6 uppercase">2026 NZ 統計控制中心</h1>
           <div className="grid grid-cols-3 gap-8">
             {[{ t: '1. 原始報名資料', id: 'raw' }, { t: '2. 學校標準表', id: 'school' }, { t: '3. 國家標準表', id: 'country' }].map(box => (
               <div key={box.id} className="p-6 border-2 border-slate-100 rounded-2xl bg-slate-50/50">
                 <p className="font-black text-lg mb-3">{box.t}</p>
-                <input type="file" onChange={e => loadFile(e, box.id)} className="text-xs w-full"/>
+                <input type="file" onChange={e => loadFile(e, box.id)} className="text-xs w-full cursor-pointer"/>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 修正區域 */}
-        {res && res.unSchools.length > 0 && (
-          <div className="mb-16 p-10 bg-rose-50 border-4 border-rose-200 rounded-3xl shadow-xl">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="font-black text-rose-800 text-3xl">⚠️ 偵測到 {res.unSchools.length} 個未知校名</h3>
-              <button onClick={() => {setFixes(prev => ({...prev, ...tempFixes})); setTempFixes({});}} className="bg-rose-600 text-white px-10 py-4 rounded-2xl font-black text-xl hover:scale-105 transition shadow-xl">更新並重新統計</button>
-            </div>
-            <div className="grid grid-cols-1 gap-4 max-h-64 overflow-y-auto pr-4 font-bold">
-              {res.unSchools.map((us) => (
-                <div key={us} className="flex items-center gap-6 bg-white p-5 border-2 rounded-2xl shadow-sm">
-                  <span className="text-sm text-slate-400 w-1/3 truncate">{us}</span>
-                  <input className="flex-1 border-b-4 border-slate-100 px-4 py-2 text-xl outline-none focus:border-rose-500" placeholder="填寫標準校名" onChange={e => setTempFixes({...tempFixes, [us]: e.target.value})}/>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 報表展示區域 */}
         {res && (
           <div className="space-y-24">
-            {/* Report 01 */}
+            {/* Report 01 - 總表 */}
             <div className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
               <div className="flex justify-between items-center mb-8">
                 <h4 className="text-2xl font-black bg-slate-900 text-white px-6 py-2 rounded-full">Report 01</h4>
                 <button onClick={() => handleDownloadPNG('table-summary', 'NZ目前報名狀況統計表')} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold">下載 PNG</button>
               </div>
               <div id="table-summary" className="p-8 bg-white border-[6px] border-slate-900">
-                <div className="flex justify-between items-end mb-6 border-b-4 border-slate-900 pb-2 font-black">
-                  <h2 className="text-4xl">NZ 目前報名狀況統計表</h2>
-                  <div className="text-right">資料更新日期：{today}</div>
-                </div>
+                <h2 className="text-4xl font-black mb-6 border-b-4 border-slate-900 pb-2">NZ 目前報名狀況統計表</h2>
+                <div className="text-right font-bold mb-2">資料更新日期：{today}</div>
                 <table className="w-full border-collapse border-[4px] border-slate-900 text-2xl font-black">
                   <thead className="bg-slate-100">
                     <tr className="border-b-[4px] border-slate-900">
@@ -200,7 +198,7 @@ export default function App() {
                       <th className="border-r-4 border-slate-900 p-4 text-right">Energy</th>
                       <th className="border-r-4 border-slate-900 p-4 text-right">Sustainability</th>
                       <th className="border-r-4 border-slate-900 p-4 text-right bg-slate-200">合計</th>
-                      <th className="p-4 text-left text-base text-slate-500">備註</th>
+                      <th className="p-4 text-left text-base text-slate-500 font-normal">備註</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -229,86 +227,49 @@ export default function App() {
               </div>
             </div>
 
-            {/* Energy 分表 */}
-            <div className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
-              <div className="flex justify-between items-center mb-8">
-                <h4 className="text-2xl font-black bg-blue-600 text-white px-6 py-2 rounded-full">Report 02</h4>
-                <button onClick={() => handleDownloadPNG('table-energy', 'Energy組-報名名單')} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold">下載 PNG</button>
-              </div>
-              <div id="table-energy" className="p-8 bg-white border-[6px] border-blue-600">
-                <h2 className="text-4xl font-black mb-6 border-b-4 border-blue-600 text-blue-600 pb-2 uppercase">Energy組 - 報名之學校與國家隊伍數</h2>
-                <table className="w-full text-xl border-collapse border-[4px] border-slate-900 font-black">
-                  <thead className="bg-slate-100">
-                    <tr className="border-b-4 border-slate-900">
-                      <th className="border-r-4 border-slate-900 p-3 w-16 text-center">#</th>
-                      <th className="border-r-4 border-slate-900 p-3 text-left">學校名稱</th>
-                      <th className="border-r-4 border-slate-900 p-3 w-40 text-right">代表國家</th>
-                      <th className="p-3 w-32 text-right">隊伍數</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {res.stats.Energy.list.sort((a:any, b:any)=>b.count - a.count).map((item:any, idx:number) => (
-                      <tr key={idx} className="border-b-2 border-slate-200">
-                        <td className="border-r-2 p-3 text-center text-slate-300">{idx+1}</td>
-                        <td className="border-r-2 p-3 text-left">{item.school.split(',')[0]}</td>
-                        <td className="border-r-2 p-3 text-right">{item.country}</td>
-                        <td className="p-3 text-right text-2xl text-blue-600">{item.count}</td>
+            {/* Report 02 & 03 - 分表 */}
+            {['Energy', 'Sustainability'].map((cat, idx) => (
+              <div key={cat} className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
+                <div className="flex justify-between items-center mb-8">
+                  <h4 className={`text-2xl font-black ${idx===0?'bg-blue-600':'bg-emerald-600'} text-white px-6 py-2 rounded-full`}>Report 0{idx+2}</h4>
+                  <button onClick={() => handleDownloadPNG(`table-${cat}`, `${cat}組-報名名單`)} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold">下載 PNG</button>
+                </div>
+                <div id={`table-${cat}`} className={`p-8 bg-white border-[6px] ${idx===0?'border-blue-600':'border-emerald-600'}`}>
+                  <h2 className={`text-4xl font-black mb-6 border-b-4 pb-2 ${idx===0?'border-blue-600 text-blue-600':'border-emerald-600 text-emerald-600'}`}>{cat}組 - 報名之學校與國家隊伍數</h2>
+                  <div className="text-right font-bold mb-2">更新時間：{today}</div>
+                  <table className="w-full text-xl border-collapse border-[4px] border-slate-900 font-black">
+                    <thead className="bg-slate-100">
+                      <tr className="border-b-4 border-slate-900">
+                        <th className="border-r-4 border-slate-900 p-3 w-16 text-center">#</th>
+                        <th className="border-r-4 border-slate-900 p-3 text-left">學校名稱</th>
+                        <th className="border-r-4 border-slate-900 p-3 w-40 text-right">代表國家</th>
+                        <th className="p-3 w-32 text-right">隊伍數</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {res.stats[cat].list.sort((a:any, b:any)=>b.count - a.count).map((item:any, idx2:number) => (
+                        <tr key={idx2} className="border-b-2 border-slate-200">
+                          <td className="border-r-2 p-3 text-center text-slate-300">{idx2+1}</td>
+                          <td className="border-r-2 p-3 text-left leading-tight">{item.school.split(',')[0]}</td>
+                          <td className="border-r-2 p-3 text-right">{item.country}</td>
+                          <td className={`p-3 text-right text-2xl ${idx===0?'text-blue-600':'text-emerald-600'}`}>{item.count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            ))}
 
-            {/* Sustainability 分表 */}
-            <div className="bg-white p-12 rounded-3xl shadow-2xl border border-slate-200">
-              <div className="flex justify-between items-center mb-8">
-                <h4 className="text-2xl font-black bg-emerald-600 text-white px-6 py-2 rounded-full">Report 03</h4>
-                <button onClick={() => handleDownloadPNG('table-sust', 'Sustainability組-報名名單')} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold">下載 PNG</button>
-              </div>
-              <div id="table-sust" className="p-8 bg-white border-[6px] border-emerald-600">
-                <h2 className="text-4xl font-black mb-6 border-b-4 border-emerald-600 text-emerald-600 pb-2 uppercase">Sustainability組 - 報名之學校與國家隊伍數</h2>
-                <table className="w-full text-xl border-collapse border-[4px] border-slate-900 font-black">
-                  <thead className="bg-slate-100">
-                    <tr className="border-b-4 border-slate-900">
-                      <th className="border-r-4 border-slate-900 p-3 w-16 text-center">#</th>
-                      <th className="border-r-4 border-slate-900 p-3 text-left">學校名稱</th>
-                      <th className="border-r-4 border-slate-900 p-3 w-40 text-right">代表國家</th>
-                      <th className="p-3 w-32 text-right">隊伍數</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {res.stats.Sustainability.list.sort((a:any, b:any)=>b.count - a.count).map((item:any, idx:number) => (
-                      <tr key={idx} className="border-b-2 border-slate-200">
-                        <td className="border-r-2 p-3 text-center text-slate-300">{idx+1}</td>
-                        <td className="border-r-2 p-3 text-left">{item.school.split(',')[0]}</td>
-                        <td className="border-r-2 p-3 text-right">{item.country}</td>
-                        <td className="p-3 text-right text-2xl text-emerald-600">{item.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* 底部匯出中心 */}
+            {/* 檔案匯出中心 */}
             <div className="bg-slate-900 p-12 rounded-3xl shadow-2xl text-white">
-              <h2 className="text-3xl font-black mb-8 border-b border-slate-700 pb-4 tracking-widest uppercase">檔案匯出中心</h2>
+              <h2 className="text-3xl font-black mb-8 border-b border-slate-700 pb-4 tracking-widest uppercase text-center">檔案匯出中心</h2>
               <div className="grid grid-cols-3 gap-8">
-                <button onClick={() => exportExcel('school')} className="flex flex-col items-center justify-center p-8 bg-slate-800 rounded-2xl border-2 border-slate-700 hover:border-emerald-500 transition-all group">
-                  <span className="text-sm text-slate-400 mb-2 group-hover:text-emerald-400">Export XLSX</span>
-                  <span className="text-xl font-black">更新後學校標準對照表</span>
-                </button>
-                <button onClick={() => exportExcel('country')} className="flex flex-col items-center justify-center p-8 bg-slate-800 rounded-2xl border-2 border-slate-700 hover:border-blue-500 transition-all group">
-                  <span className="text-sm text-slate-400 mb-2 group-hover:text-blue-400">Export XLSX</span>
-                  <span className="text-xl font-black">更新後國家標準對照表</span>
-                </button>
-                <button onClick={() => exportExcel('stats')} className="flex flex-col items-center justify-center p-8 bg-emerald-600 rounded-2xl border-2 border-emerald-500 hover:bg-white hover:text-emerald-600 transition-all group">
-                  <span className="text-sm text-emerald-200 mb-2 group-hover:text-emerald-600">Final Report</span>
-                  <span className="text-xl font-black">本次統計資料表 (3分頁)</span>
-                </button>
+                <button onClick={() => exportExcel('school')} className="p-8 bg-slate-800 rounded-2xl border-2 border-slate-700 hover:border-emerald-500 transition text-xl font-black">更新後學校標準對照表</button>
+                <button onClick={() => exportExcel('country')} className="p-8 bg-slate-800 rounded-2xl border-2 border-slate-700 hover:border-blue-500 transition text-xl font-black">更新後國家標準對照表</button>
+                <button onClick={() => exportExcel('stats')} className="p-8 bg-emerald-600 rounded-2xl border-2 border-emerald-500 hover:bg-white hover:text-emerald-600 transition text-xl font-black">本次統計資料表</button>
               </div>
-              <p className="text-center text-slate-600 font-bold mt-12 italic">2026 NZ AUTO-STATS ENGINE v1.6</p>
+              <p className="text-center text-slate-600 font-bold mt-12 italic tracking-widest">2026 NZ AUTO-STATS ENGINE v1.7</p>
             </div>
           </div>
         )}
