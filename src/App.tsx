@@ -110,9 +110,9 @@ export default function App() {
         ["統計項目", "Energy", "Sustainability", "合計", "備註"],
         ["報名隊伍數", res.stats.Energy.teams, res.stats.Sustainability.teams, res.stats.Energy.teams + res.stats.Sustainability.teams, ""],
         ["報名人數", res.stats.Energy.people, res.stats.Sustainability.people, res.stats.Energy.people + res.stats.Sustainability.people, ""],
-        ["報名學校數", res.stats.Energy.schools.size, res.stats.Sustainability.schools.size, new Set([...res.stats.Energy.schools, ...res.stats.Sustainability.schools]).size, "不重複"],
+        ["報名學校數", res.stats.Energy.schools.size, res.stats.Sustainability.schools.size, new Set([...res.stats.Energy.schools, ...res.stats.Sustainability.schools]).size, "不計算重複學校"],
         ["海外學校數", res.stats.Energy.overseas, res.stats.Sustainability.overseas, res.stats.Energy.overseas + res.stats.Sustainability.overseas, ""],
-        ["報名國家數", res.stats.Energy.countries.size, res.stats.Sustainability.countries.size, new Set([...res.stats.Energy.countries, ...res.stats.Sustainability.countries]).size, ""]
+        ["報名國家數", res.stats.Energy.countries.size, res.stats.Sustainability.countries.size, new Set([...res.stats.Energy.countries, ...res.stats.Sustainability.countries]).size, "不計算重複國家"]
       ];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s1), "統計總表");
       const s2 = [["#", "學校名稱", "代表國家", "隊伍數"], ...res.stats.Energy.list.sort((a:any,b:any)=>b.count-a.count).map((item:any, i:number)=>[i+1, item.school, item.country, item.count])];
@@ -174,7 +174,9 @@ export default function App() {
                 <tbody>
                   {[
                     { l: '報名隊伍數', k: 'teams' }, { l: '報名人數', k: 'people' }, 
-                    { l: '報名學校數', k: 'schools', note: '不重複' }, { l: '海外學校數', k: 'overseas' }, { l: '報名國家數', k: 'countries' }
+                    { l: '報名學校數', k: 'schools', note: '不計算重複學校' }, 
+                    { l: '海外學校數', k: 'overseas' }, 
+                    { l: '報名國家數', k: 'countries', note: '不計算重複國家' }
                   ].map((row, i) => (
                     <tr key={i}>
                       <td className="border border-slate-300 p-2">{row.l}</td>
